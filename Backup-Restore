@@ -1,0 +1,65 @@
+Atlas Backup/Restore procedure
+
+Atlas backup:
+
+1) Backup Hbase tables for Atlas using following steps:-
+
+i. Create a folder in HDFS which is having an owner as HBase.
+
+ii. Run below command from HBase user with TGT (if required) to export HBase table into HDFS folder which is newly created.
+
+# hbase org.apache.hadoop.hbase.mapreduce.Export "atlas_titan" "/<folder>/atlas_titan" 
+# hbase org.apache.hadoop.hbase.mapreduce.Export "ATLAS_ENTITY_AUDIT_EVENTS" "/<folder>/ATLAS_ENTITY_AUDIT_EVENTS" 
+
+Note: Above commands will backup the Data from HBase table into HDFS.
+
+2) Backup Solr tables for Atlas from Ambari Infra Solr:-
+
+In addition to HBase tables, Atlas data is stored in 3 Solr collections as well: vertex_index, edge_index and fulltext_index. These need to be backed up as well from Ambari Infra Solr.
+
+The backup command will backup Solr indexes and configurations for a specified collection. The backup command takes one copy from each shard for the indexes. For configurations, it backs up the configSet that was associated with the collection and metadata. 
+
+Use following syntax to run Solr backup API using curl command:
+# http://<Infra Solr Host>:<Port>/solr/admin/collections?action=BACKUP&name=myBackupName&collection=myCollectionName&location=/path/to/my/shared/drive
+
+Example:
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=BACKUP&name=vertex_index_bkp&collection=vertex_index&location=/tmp/vertex_index_backup"
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=BACKUP&name=edge_index_bkp&collection=edge_index&location=/tmp/edge_index_backup"
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=BACKUP&name=fulltext_index_bkp&collection=fulltext_index&location=/tmp/fulltext_index_backup"
+
+Note: If your cluster is kerberized, then run kinit against solr keytab first and add "--negotiate -u :" after -ivk flag in the above curl command.
+
+Example: curl -ivk --negotiate -u : https://host1.example.com:8886
+
+3) Take Atlas configuration backup: Backup all the files under /etc/atlas/conf folder in your Atlas Metadata server.
+
+Atlas Restore:
+
+Please note - HBase and solr collections should not be present.
+
+1) Restore Hbase table using below mentioned steps:-
+
+i) First create Hbase table schema for Atlas tables 'atlas_titan' and 'ATLAS_ENTITY_AUDIT_EVENT' as follows:
+
+# create 'atlas_titan' , {NAME => 'e', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'} ,{NAME => 'g', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'} , {NAME => 'i', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'} , {NAME => 'l', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'} , {NAME => 'm', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'} , {NAME => 's', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+
+# create 'ATLAS_ENTITY_AUDIT_EVENTS' , {NAME => 'dt', BLOOMFILTER => 'ROW', VERSIONS => '1', IN_MEMORY => 'false', KEEP_DELETED_CELLS => 'FALSE', DATA_BLOCK_ENCODING => 'FAST_DIFF', TTL => '2592000', COMPRESSION => 'GZ', MIN_VERSIONS => '0', BLOCKCACHE => 'true', BLOCKSIZE => '65536', REPLICATION_SCOPE => '0'}
+
+ii) Run below command from the HBase user with TGT if required to import HBase table from HDFS folder to HBase table:
+# hbase org.apache.hadoop.hbase.mapreduce.Import 'atlas_titan' '/<folder>/atlas_titan' 
+# hbase org.apache.hadoop.hbase.mapreduce.Import 'ATLAS_ENTITY_AUDIT_EVENTS' '/<folder>/ATLAS_ENTITY_AUDIT_EVENTS' 
+
+2) Restore Solr tables for Atlas in Ambari Infra Solr:-
+The restore operation will create a collection with the specified name in the collection parameter. One cannot restore into the same collection where the backup was taken from and the target collection should not be present when the API is called, as Solr will create it. The collection created will be of the same number of shards and replicas as the original collection, preserving routing information, etc. While running the restore, if a configSet with the same name exists in ZooKeeper then Solr will reuse that, or else it will upload the backed up configSet in ZooKeeper and use that.
+
+Following is an example of Restore  command:
+# http://<Infra Solr Host>:<Port>/solr/admin/collections?action=RESTORE&name=myBackupName&location=/path/to/my/shared/drive&collection=myRestoredCollectionName
+
+Example:
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=RESTORE&name=vertex_index_bkp&location=/tmp/vertex_index_backup&collection=vertex_index
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=RESTORE&name=edge_index_bkp&location=/tmp/edge_index_backup&collection=edge_index
+# curl -ivk "https://host1.example.com:8886/solr/admin/collections?action=RESTORE&name=fulltext_index_bkp&location=/tmp/fulltext_index_backup&collection=fulltext_index
+
+Make sure whether those 3 Atlas collections got restored and showing as healthy in Solr dashboard.
+
+3) Restore Atlas configuration backup: You can verify all the configuration files under /etc/atlas/conf folder and check whether you have modified any default attributes for Atlas (or) added any custom property. Then add these attributes to the configuration of new Atlas instance via Ambari.
